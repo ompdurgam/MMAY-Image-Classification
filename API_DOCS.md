@@ -1,0 +1,313 @@
+# MMAY Image Verification API — Documentation
+
+> **Version:** 1.0.0  
+> **Base URL:** `http://<host>:8000`  
+> **Interactive Docs:** `/docs` (Swagger UI) · `/redoc` (ReDoc)
+
+---
+
+## Overview
+
+The **Mukhyamantri Avas Yojana (MMAY) Image Verification API** verifies construction-stage photographs against the expected stage for a given scheme level. It uses a trained Keras model (`MMAY_Image_2-0.h5`) to classify submitted images and returns a structured verification result.
+
+### Construction Level → Stage Mapping
+
+| Level (`level`) | Expected Stage |
+|:--------------:|----------------|
+| `2`            | `plinth`       |
+| `3`            | `roof_cast`    |
+| `4`            | `completion`   |
+
+### Confidence Threshold
+
+The verification checks two conditions in order:
+1. The predicted stage must exactly match the expected stage for the submitted level.
+2. The model must produce a confidence score ≥ **70%** (default).
+
+Anything below that confidence triggers a `manual_check_needed` outcome, even if the predicted stage is correct. This threshold is configurable via the `CONFIDENCE_THRESHOLD` environment variable.
+
+---
+
+## Authentication
+
+No authentication is required. CORS is open to all origins (`*`) in the default configuration — restrict `allow_origins` in production.
+
+---
+
+## Endpoints
+
+### 1. `GET /health`
+
+**Summary:** Health check — reports service liveness and model readiness.
+
+**Tags:** `Utility`
+
+#### Request
+
+No parameters, no body.
+
+```
+GET /health HTTP/1.1
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "status": "ok",
+  "model_loaded": true,
+  "version": "1.0.0"
+}
+```
+
+| Field          | Type    | Description                                          |
+|----------------|---------|------------------------------------------------------|
+| `status`       | string  | `"ok"` when model is ready, `"degraded"` otherwise  |
+| `model_loaded` | boolean | `true` if the Keras model was loaded at startup      |
+| `version`      | string  | API version string (always `"1.0.0"`)               |
+
+#### Example — Model Not Ready
+
+```json
+{
+  "status": "degraded",
+  "model_loaded": false,
+  "version": "1.0.0"
+}
+```
+
+---
+
+### 2. `POST /predict`
+
+**Summary:** Verify a construction-stage photograph against a submitted scheme level.
+
+**Tags:** `Prediction`  
+**Content-Type:** `multipart/form-data`
+
+#### Request
+
+| Field   | Type    | Required | Description                                                                 |
+|---------|---------|----------|-----------------------------------------------------------------------------|
+| `level` | integer | ✅       | Construction level: `2` (plinth), `3` (roof_cast), `4` (completion)       |
+| `image` | file    | ✅       | Site photograph — accepted formats: **JPEG**, **PNG**, **WebP** (max 10 MB)|
+
+#### Example cURL
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -F "level=2" \
+  -F "image=@/path/to/site_photo.jpg"
+```
+
+#### Example — Python `requests`
+
+```python
+import requests
+
+with open("site_photo.jpg", "rb") as f:
+    response = requests.post(
+        "http://localhost:8000/predict",
+        data={"level": 2},
+        files={"image": ("site_photo.jpg", f, "image/jpeg")},
+    )
+
+print(response.json())
+```
+
+---
+
+#### Responses
+
+##### `200 OK` — Verification successful
+
+Returned when the model confidence meets the threshold **and** the predicted class matches the expected stage.
+
+```json
+{
+  "status": "success",
+  "predicted_class": "plinth",
+  "confidence": 0.923,
+  "submitted_level": 2,
+  "expected_class": "plinth",
+  "message": "Verification successful. Stage 'plinth' confirmed."
+}
+```
+
+##### `200 OK` — Manual check needed
+
+Returned when the predicted class does not match the expected stage, or if the class matches but the confidence score is below the threshold.
+
+```json
+{
+  "status": "manual_check_needed",
+  "predicted_class": "roof_cast",
+  "confidence": 0.55,
+  "submitted_level": 3,
+  "expected_class": "roof_cast",
+  "message": "Manual review required. Stage 'roof_cast' matched, but confidence (0.55) is below the required threshold (0.70)."
+}
+```
+
+#### Response Schema — `PredictResponse`
+
+| Field             | Type              | Description                                                        |
+|-------------------|-------------------|--------------------------------------------------------------------|
+| `status`          | `PredictionStatus`| `"success"` or `"manual_check_needed"`                            |
+| `predicted_class` | string \| null    | Actual class label predicted by the model (null only if model index is unknown)|
+| `confidence`      | float [0.0–1.0]   | Top-class probability score from the model                         |
+| `submitted_level` | integer           | The `level` value sent by the caller                               |
+| `expected_class`  | string            | The stage label that maps to `submitted_level`                     |
+| `message`         | string            | Human-readable summary of the outcome                              |
+
+#### `PredictionStatus` Enum
+
+| Value                  | Meaning                                                       |
+|------------------------|---------------------------------------------------------------|
+| `"success"`            | Image verified — predicted stage matches the submitted level  |
+| `"manual_check_needed"`| Requires human review (stage mismatch)      |
+
+---
+
+#### Error Responses
+
+| HTTP Status | Condition                                                       | Example Detail                                                   |
+|:-----------:|-----------------------------------------------------------------|------------------------------------------------------------------|
+| `400`       | Uploaded file is empty or the image data is corrupt/unreadable | `"Uploaded image is empty."`                                     |
+| `413`       | Image exceeds the 10 MB size limit                             | `"Image size (12.3 MB) exceeds the limit of 10 MB."`            |
+| `415`       | Unsupported MIME type (not JPEG / PNG / WebP)                  | `"Unsupported image type 'image/gif'. Allowed: image/jpeg, ..."` |
+| `422`       | `level` value is not in `{2, 3, 4}`                            | `"Level 5 is not recognised. Valid levels: [2, 3, 4]."`         |
+| `503`       | ML model failed to load at startup                             | `"ML model is not available. Please try again later."`           |
+
+##### Error Response Body (standard FastAPI format)
+
+```json
+{
+  "detail": "<error message>"
+}
+```
+
+---
+
+## Decision Logic
+
+The API applies the following decision table after inference:
+
+```
+predicted_label ≠ expected_class
+  → status: manual_check_needed
+  → reason: "Predicted stage 'X' does not match expected stage 'Y'."
+
+predicted_label == expected_class AND confidence < CONFIDENCE_THRESHOLD
+  → status: manual_check_needed
+  → reason: "Stage 'X' matched, but confidence (X.XX) is below the required threshold (Y.YY)."
+
+predicted_label == expected_class AND confidence ≥ CONFIDENCE_THRESHOLD
+  → status: success
+  → reason: "Stage 'X' confirmed."
+```
+
+---
+
+## Configuration
+
+The API is configured entirely through environment variables (or a `.env` file in the project root).
+
+| Variable               | Default                                                   | Description                                             |
+|------------------------|-----------------------------------------------------------|---------------------------------------------------------|
+| `MODEL_PATH`           | `MMAY_Image_2-0.h5`                                       | Path to the Keras model file                            |
+| `IMG_HEIGHT`           | `224`                                                     | Input image height (pixels) expected by the model       |
+| `IMG_WIDTH`            | `224`                                                     | Input image width (pixels) expected by the model        |
+| `CONFIDENCE_THRESHOLD` | `0.70`                                                    | Minimum confidence (0–1) to accept a prediction         |
+| `LEVEL_CLASS_MAP`      | `{"2":"plinth","3":"roof_cast","4":"completion"}`         | JSON map from level integer to class label              |
+| `CLASS_INDEX_MAP`      | `{"0":"completion","1":"plinth","2":"roof_cast"}` | JSON map from model output index to class label |
+| `ALLOWED_IMAGE_TYPES`  | `image/jpeg,image/png,image/webp`                         | Comma-separated list of accepted MIME types             |
+| `MAX_IMAGE_SIZE_MB`    | `10`                                                      | Maximum allowed upload size in megabytes                |
+| `APP_HOST`             | `0.0.0.0`                                                 | Uvicorn bind address                                    |
+| `APP_PORT`             | `8000`                                                    | Uvicorn listen port                                     |
+| `LOG_LEVEL`            | `info`                                                    | Uvicorn/Python logging level                            |
+
+---
+
+## Image Pre-processing Pipeline
+
+Before inference, every uploaded image goes through the following steps internally:
+
+1. **Read bytes** — the full file content is read into memory.
+2. **Empty check** — rejects zero-byte uploads (`400`).
+3. **Size check** — rejects uploads above `MAX_IMAGE_SIZE_MB` (`413`).
+4. **MIME type check** — rejects types not in `ALLOWED_IMAGE_TYPES` (`415`).
+5. **Decode** — `PIL.Image.open()` decodes the bytes; corrupt data raises `400`.
+6. **Convert to RGB** — strips alpha channels and palette modes.
+7. **Resize** — bilinear resize to `IMG_HEIGHT × IMG_WIDTH` (default 224×224).
+8. **Normalise** — pixel values divided by 255, yielding floats in `[0.0, 1.0]`.
+9. **Batch dim** — array is expanded to shape `(1, H, W, 3)` for `model.predict`.
+
+---
+
+## Running the API
+
+### Prerequisites
+
+```
+Python 3.10+
+```
+
+### Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Start the server
+
+```bash
+python main.py
+```
+
+Or with Uvicorn directly:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+The API will be available at `http://localhost:8000`.  
+Interactive Swagger UI: `http://localhost:8000/docs`
+
+---
+
+## Project Structure
+
+```
+MMAY/
+├── main.py                          # Entry point — creates app + runs uvicorn
+├── requirements.txt
+├── .env                             # Environment overrides (not committed)
+├── MMAY_Image_2-0.h5               # Trained Keras model
+└── app/
+    ├── application.py               # App factory, lifespan (startup/shutdown)
+    ├── api/
+    │   ├── dependencies.py          # Shared FastAPI Depends() providers
+    │   └── routes/
+    │       ├── health.py            # GET /health
+    │       └── predict.py           # POST /predict
+    ├── core/
+    │   ├── config.py                # Settings (env-driven)
+    │   ├── logging.py               # Logger factory
+    │   └── model_store.py           # In-process model singleton
+    ├── schemas/
+    │   └── prediction.py            # Pydantic request/response models
+    └── services/
+        ├── image_validator.py       # Upload validation (size, MIME)
+        ├── model_loader.py          # Keras model loading
+        ├── predictor.py             # Inference + decision logic
+        └── preprocessing.py        # Image decode, resize, normalise
+```
+
+---
+
+## Changelog
+
+| Version | Notes                          |
+|---------|--------------------------------|
+| 1.0.0   | Initial release                |
