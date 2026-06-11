@@ -38,7 +38,7 @@ class PredictResponse(BaseModel):
                 },
                 {
                     "status": "manual_check_needed",
-                    "predicted_class": "other",
+                    "predicted_class": "plinth",
                     "predicted_confidence": 55.0,
                     "submitted_level": 3,
                     "expected_class": "roof_cast",

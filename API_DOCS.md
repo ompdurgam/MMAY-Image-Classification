@@ -127,9 +127,10 @@ Returned when the model confidence meets the threshold **and** the predicted cla
 {
   "status": "success",
   "predicted_class": "plinth",
-  "confidence": 0.923,
+  "predicted_confidence": 92.3,
   "submitted_level": 2,
   "expected_class": "plinth",
+  "expected_confidence": 92.3,
   "message": "Verification successful. Stage 'plinth' confirmed."
 }
 ```
@@ -141,24 +142,26 @@ Returned when the predicted class does not match the expected stage, or if the c
 ```json
 {
   "status": "manual_check_needed",
-  "predicted_class": "roof_cast",
-  "confidence": 0.55,
+  "predicted_class": "plinth",
+  "predicted_confidence": 55.0,
   "submitted_level": 3,
   "expected_class": "roof_cast",
-  "message": "Manual review required. Stage 'roof_cast' matched, but confidence (0.55) is below the required threshold (0.70)."
+  "expected_confidence": 42.5,
+  "message": "Manual review required. Predicted stage 'plinth' does not match expected stage 'roof_cast'."
 }
 ```
 
 #### Response Schema — `PredictResponse`
 
-| Field             | Type              | Description                                                        |
-|-------------------|-------------------|--------------------------------------------------------------------|
-| `status`          | `PredictionStatus`| `"success"` or `"manual_check_needed"`                            |
-| `predicted_class` | string \| null    | Actual class label predicted by the model (null only if model index is unknown)|
-| `confidence`      | float [0.0–1.0]   | Top-class probability score from the model                         |
-| `submitted_level` | integer           | The `level` value sent by the caller                               |
-| `expected_class`  | string            | The stage label that maps to `submitted_level`                     |
-| `message`         | string            | Human-readable summary of the outcome                              |
+| Field                  | Type              | Description                                                        |
+|------------------------|-------------------|--------------------------------------------------------------------|
+| `status`               | `PredictionStatus`| `"success"` or `"manual_check_needed"`                            |
+| `predicted_class`      | string \| null    | Actual class label predicted by the model (null only if model index is unknown)|
+| `predicted_confidence` | float [0–100]     | Confidence (%) for the predicted class                             |
+| `submitted_level`      | integer           | The `level` value sent by the caller                               |
+| `expected_class`       | string            | The stage label that maps to `submitted_level`                     |
+| `expected_confidence`  | float [0–100]     | Confidence (%) for the expected class                              |
+| `message`              | string            | Human-readable summary of the outcome                              |
 
 #### `PredictionStatus` Enum
 
@@ -283,7 +286,12 @@ MMAY/
 ├── main.py                          # Entry point — creates app + runs uvicorn
 ├── requirements.txt
 ├── .env                             # Environment overrides (not committed)
-├── MMAY_Image_2-0.h5               # Trained Keras model
+├── .gitignore
+├── API_DOCS.md                      # This documentation file
+├── MMAY.ipynb                       # Training / experimentation notebook
+├── model/
+│   ├── MMAY_Image_2-0.h5           # Trained Keras model (active)
+│   └── construction_model.h5       # Legacy / alternate model
 └── app/
     ├── application.py               # App factory, lifespan (startup/shutdown)
     ├── api/
@@ -301,13 +309,14 @@ MMAY/
         ├── image_validator.py       # Upload validation (size, MIME)
         ├── model_loader.py          # Keras model loading
         ├── predictor.py             # Inference + decision logic
-        └── preprocessing.py        # Image decode, resize, normalise
+        └── preprocessing.py         # Image decode, resize, normalise
 ```
 
 ---
 
 ## Changelog
 
-| Version | Notes                          |
-|---------|--------------------------------|
+| Version | Notes                                                              |
+|---------|--------------------------------------------------------------------|
+| 1.1.0   | Renamed `confidence` → `predicted_confidence`, added `expected_confidence`, values now in % (0–100) |
 | 1.0.0   | Initial release                |
