@@ -88,40 +88,48 @@ async def verify_image(
             detail=str(exc),
         )
 
-    # ── 4. Inference ─────────────────────────────────────────────────────────
+    # ── 4. Inference ─────────────────────────────────────────────────────────────
     t0 = time.perf_counter()
-    predicted_label, confidence = run_inference(model, img_array, cfg.CLASS_INDEX_MAP)
+    predicted_label, confidence, all_confidences = run_inference(
+        model, img_array, cfg.CLASS_INDEX_MAP,
+    )
     elapsed_ms = (time.perf_counter() - t0) * 1000
 
+    # Confidence the model assigned to the *expected* class
+    expected_conf = all_confidences.get(expected_class, 0.0)
+
     logger.info(
-        "level=%d | expected=%s | predicted=%s | conf=%.3f | %.1f ms",
-        level, expected_class, predicted_label, confidence, elapsed_ms,
+        "level=%d | expected=%s | predicted=%s | conf=%.3f | expected_conf=%.3f | %.1f ms",
+        level, expected_class, predicted_label, confidence, expected_conf, elapsed_ms,
     )
 
-    # ── 5. Decision ───────────────────────────────────────────────────────────
+    # ── 5. Decision ───────────────────────────────────────────────────────────────
     result = make_decision(
         predicted_label      = predicted_label,
         confidence           = confidence,
         expected_class       = expected_class,
+        expected_confidence  = expected_conf,
         confidence_threshold = cfg.CONFIDENCE_THRESHOLD,
     )
 
     # ── 6. Map to response schema ────────────────────────────────────────────
     if result.success:
         return PredictResponse(
-            status          = PredictionStatus.SUCCESS,
-            predicted_class = result.predicted_class,
-            confidence      = result.confidence,
-            submitted_level = level,
-            expected_class  = result.expected_class,
-            message         = f"Verification successful. {result.reason}",
+            status               = PredictionStatus.SUCCESS,
+            predicted_class      = result.predicted_class,
+            predicted_confidence = result.confidence,
+            submitted_level      = level,
+            expected_class       = result.expected_class,
+            expected_confidence  = result.expected_confidence,
+            message              = f"Verification successful. {result.reason}",
         )
 
     return PredictResponse(
-        status          = PredictionStatus.MANUAL_CHECK_NEEDED,
-        predicted_class = result.predicted_class,   # may be None only if index not in CLASS_INDEX_MAP
-        confidence      = result.confidence,
-        submitted_level = level,
-        expected_class  = result.expected_class,
-        message         = f"Manual review required. {result.reason}",
+        status               = PredictionStatus.MANUAL_CHECK_NEEDED,
+        predicted_class      = result.predicted_class,   # may be None only if index not in CLASS_INDEX_MAP
+        predicted_confidence = result.confidence,
+        submitted_level      = level,
+        expected_class       = result.expected_class,
+        expected_confidence  = result.expected_confidence,
+        message              = f"Manual review required. {result.reason}",
     )
