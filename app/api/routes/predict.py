@@ -117,19 +117,19 @@ async def verify_image(
         return PredictResponse(
             status               = PredictionStatus.SUCCESS,
             predicted_class      = result.predicted_class,
-            predicted_confidence = result.confidence,
+            predicted_confidence = round(result.confidence * 100, 2),
             submitted_level      = level,
             expected_class       = result.expected_class,
-            expected_confidence  = result.expected_confidence,
+            expected_confidence  = round(result.expected_confidence * 100, 2),
             message              = f"Verification successful. {result.reason}",
         )
 
     return PredictResponse(
         status               = PredictionStatus.MANUAL_CHECK_NEEDED,
-        predicted_class      = result.predicted_class,   # may be None only if index not in CLASS_INDEX_MAP
-        predicted_confidence = result.confidence,
+        predicted_class      = result.predicted_class,
+        predicted_confidence = round(result.confidence * 100, 2),
         submitted_level      = level,
         expected_class       = result.expected_class,
-        expected_confidence  = result.expected_confidence,
+        expected_confidence  = round(result.expected_confidence * 100, 2),
         message              = f"Manual review required. {result.reason}",
     )
