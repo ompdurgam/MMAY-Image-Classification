@@ -87,16 +87,19 @@ GET /health HTTP/1.1
 
 #### Request
 
-| Field   | Type    | Required | Description                                                                 |
-|---------|---------|----------|-----------------------------------------------------------------------------|
-| `level` | integer | ✅       | Construction level: `2` (plinth), `3` (roof_cast), `4` (completion)       |
-| `image` | file    | ✅       | Site photograph — accepted formats: **JPEG**, **PNG**, **WebP** (max 10 MB)|
+| Field      | Type    | Required | Description                                                            
+     |
+|------------|---------|----------|-----------------------------------------------------------------------------|
+| `level`    | integer | ✅       | Construction level: `2` (plinth), `3` (roof_cast), `4` (completion)       |
+| `image_id` | string  | ✅       | Caller-supplied image identifier, echoed back in the response             |
+| `image`    | file    | ✅       | Site photograph — accepted formats: **JPEG**, **PNG**, **WebP** (max 10 MB)|
 
 #### Example cURL
 
 ```bash
 curl -X POST http://localhost:8000/predict \
   -F "level=2" \
+  -F "image_id=23456P21" \
   -F "image=@/path/to/site_photo.jpg"
 ```
 
@@ -108,7 +111,7 @@ import requests
 with open("site_photo.jpg", "rb") as f:
     response = requests.post(
         "http://localhost:8000/predict",
-        data={"level": 2},
+        data={"level": 2, "image_id": "23456P21"},
         files={"image": ("site_photo.jpg", f, "image/jpeg")},
     )
 
@@ -131,6 +134,7 @@ Returned when the model confidence meets the threshold **and** the predicted cla
   "submitted_level": 2,
   "expected_class": "plinth",
   "expected_confidence": 92.3,
+  "image_id": "23456P21",
   "message": "Verification successful. Stage 'plinth' confirmed."
 }
 ```
@@ -147,6 +151,7 @@ Returned when the predicted class does not match the expected stage, or if the c
   "submitted_level": 3,
   "expected_class": "roof_cast",
   "expected_confidence": 42.5,
+  "image_id": "78901R03",
   "message": "Manual review required. Predicted stage 'plinth' does not match expected stage 'roof_cast'."
 }
 ```
@@ -161,6 +166,7 @@ Returned when the predicted class does not match the expected stage, or if the c
 | `submitted_level`      | integer           | The `level` value sent by the caller                               |
 | `expected_class`       | string            | The stage label that maps to `submitted_level`                     |
 | `expected_confidence`  | float [0–100]     | Confidence (%) for the expected class                              |
+| `image_id`             | string            | Caller-supplied image identifier, echoed back verbatim             |
 | `message`              | string            | Human-readable summary of the outcome                              |
 
 #### `PredictionStatus` Enum
@@ -316,7 +322,9 @@ MMAY/
 
 ## Changelog
 
-| Version | Notes                                                              |
+| Version | Notes 
+|---------|--------------------------------------------------------------------|
+| 1.2.0   | Added `New Model "MMAY_Modelv2"`, `Accuracy 83%`  
 |---------|--------------------------------------------------------------------|
 | 1.1.0   | Renamed `confidence` → `predicted_confidence`, added `expected_confidence`, values now in % (0–100) |
 | 1.0.0   | Initial release                |

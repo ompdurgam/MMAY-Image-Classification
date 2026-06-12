@@ -42,6 +42,10 @@ async def verify_image(
         int,
         Form(description="Construction level: 2 (plinth), 3 (roof_cast), 4 (completion)."),
     ],
+    image_id: Annotated[
+        str,
+        Form(description="Caller-supplied image identifier, echoed back in the response."),
+    ],
     image: Annotated[
         UploadFile,
         File(description="Site photograph — JPEG / PNG / WebP."),
@@ -121,6 +125,7 @@ async def verify_image(
             submitted_level      = level,
             expected_class       = result.expected_class,
             expected_confidence  = round(result.expected_confidence * 100, 2),
+            image_id             = image_id,
             message              = f"Verification successful. {result.reason}",
         )
 
@@ -131,5 +136,6 @@ async def verify_image(
         submitted_level      = level,
         expected_class       = result.expected_class,
         expected_confidence  = round(result.expected_confidence * 100, 2),
+        image_id             = image_id,
         message              = f"Manual review required. {result.reason}",
     )

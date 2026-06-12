@@ -22,6 +22,7 @@ class PredictResponse(BaseModel):
     submitted_level: int              = Field(..., description="Construction level sent by caller.")
     expected_class:       str              = Field(..., description="Class label that maps to submitted_level.")
     expected_confidence:  float            = Field(..., ge=0.0, le=100.0, description="Confidence (%) for the expected class.")
+    image_id:             str              = Field(..., description="Caller-supplied image identifier, echoed back in the response.")
     message:              str              = Field(..., description="Human-readable summary.")
 
     model_config = {
@@ -34,6 +35,7 @@ class PredictResponse(BaseModel):
                     "submitted_level": 2,
                     "expected_class": "plinth",
                     "expected_confidence": 92.3,
+                    "image_id": "23456P21",
                     "message": "Verification successful. Stage 'plinth' confirmed.",
                 },
                 {
@@ -43,6 +45,7 @@ class PredictResponse(BaseModel):
                     "submitted_level": 3,
                     "expected_class": "roof_cast",
                     "expected_confidence": 55.0,
+                    "image_id": "78901R03",
                     "message": "Manual review required. Confidence below threshold.",
                 },
             ]
