@@ -56,6 +56,7 @@ GET /health HTTP/1.1
 {
   "status": "ok",
   "model_loaded": true,
+  "model_name": "MMAY_Modelv2",
   "version": "1.0.0"
 }
 ```
@@ -64,6 +65,7 @@ GET /health HTTP/1.1
 |----------------|---------|------------------------------------------------------|
 | `status`       | string  | `"ok"` when model is ready, `"degraded"` otherwise  |
 | `model_loaded` | boolean | `true` if the Keras model was loaded at startup      |
+| `model_name`   | string  | Name of the loaded ML model file (without extension) |
 | `version`      | string  | API version string (always `"1.0.0"`)               |
 
 #### Example — Model Not Ready
@@ -72,6 +74,7 @@ GET /health HTTP/1.1
 {
   "status": "degraded",
   "model_loaded": false,
+  "model_name": "MMAY_Modelv2",
   "version": "1.0.0"
 }
 ```
@@ -131,6 +134,7 @@ Returned when the model confidence meets the threshold **and** the predicted cla
   "status": "success",
   "predicted_class": "plinth",
   "predicted_confidence": 92.3,
+  "predicted_level": 2,
   "submitted_level": 2,
   "expected_class": "plinth",
   "expected_confidence": 92.3,
@@ -148,6 +152,7 @@ Returned when the predicted class does not match the expected stage, or if the c
   "status": "manual_check_needed",
   "predicted_class": "plinth",
   "predicted_confidence": 55.0,
+  "predicted_level": 2,
   "submitted_level": 3,
   "expected_class": "roof_cast",
   "expected_confidence": 42.5,
@@ -163,6 +168,7 @@ Returned when the predicted class does not match the expected stage, or if the c
 | `status`               | `PredictionStatus`| `"success"` or `"manual_check_needed"`                            |
 | `predicted_class`      | string \| null    | Actual class label predicted by the model (null only if model index is unknown)|
 | `predicted_confidence` | float [0–100]     | Confidence (%) for the predicted class                             |
+| `predicted_level`      | integer \| null   | Construction level corresponding to `predicted_class`               |
 | `submitted_level`      | integer           | The `level` value sent by the caller                               |
 | `expected_class`       | string            | The stage label that maps to `submitted_level`                     |
 | `expected_confidence`  | float [0–100]     | Confidence (%) for the expected class                              |
@@ -175,6 +181,134 @@ Returned when the predicted class does not match the expected stage, or if the c
 |------------------------|---------------------------------------------------------------|
 | `"success"`            | Image verified — predicted stage matches the submitted level  |
 | `"manual_check_needed"`| Requires human review (stage mismatch)      |
+
+---
+
+### 3. `POST /predict/batch`
+
+**Summary:** Batch verify multiple construction-stage photographs from disk under a single scheme level.
+
+**Tags:** `Prediction`  
+**Content-Type:** `application/json`
+
+#### Request
+
+The request body is a JSON object with the following fields:
+
+| Field   | Type              | Required | Description                                                            |
+|---------|-------------------|----------|------------------------------------------------------------------------|
+| `label`  | integer           | ✅       | Construction level: `2` (plinth), `3` (roof_cast), `4` (completion)     |
+| `images` | array of objects  | ✅       | List of image entries to verify (minimum 1, maximum 10 items)           |
+
+Each object in the `images` array contains:
+
+| Field      | Type   | Required | Description                                                               |
+|------------|--------|----------|---------------------------------------------------------------------------|
+| `image_id` | string | ✅       | Caller-supplied image identifier, echoed back in the response             |
+| `image`    | string | ✅       | File path to the image on the server (absolute or relative)               |
+
+#### Example Request Body
+
+```json
+{
+  "label": 2,
+  "images": [
+    {
+      "image_id": "image_1",
+      "image": "/images/image_1.jpg"
+    },
+    {
+      "image_id": "image_2",
+      "image": "/images/image_2.jpg"
+    },
+    {
+      "image_id": "image_3",
+      "image": "/images/image_3.jpg"
+    }
+  ]
+}
+```
+
+#### Example cURL
+
+```bash
+curl -X POST http://localhost:8000/predict/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "label": 2,
+    "images": [
+      {"image_id": "image_1", "image": "/images/image_1.jpg"},
+      {"image_id": "image_2", "image": "/images/image_2.jpg"},
+      {"image_id": "image_3", "image": "/images/image_3.jpg"}
+    ]
+  }'
+```
+
+#### Responses
+
+##### `200 OK`
+
+Returns an object containing a list of `results`. Each result represents the verification outcome for a single image in the request.
+
+```json
+{
+  "results": [
+    {
+      "status": "success",
+      "predicted_class": "plinth",
+      "predicted_confidence": 92.3,
+      "predicted_level": 2,
+      "submitted_level": 2,
+      "expected_class": "plinth",
+      "expected_confidence": 92.3,
+      "image_id": "image_1",
+      "message": "Verification successful. Stage 'plinth' confirmed."
+    },
+    {
+      "status": "success",
+      "predicted_class": "plinth",
+      "predicted_confidence": 91.8,
+      "predicted_level": 2,
+      "submitted_level": 2,
+      "expected_class": "plinth",
+      "expected_confidence": 91.8,
+      "image_id": "image_2",
+      "message": "Verification successful. Stage 'plinth' confirmed."
+    },
+    {
+      "status": "success",
+      "predicted_class": "plinth",
+      "predicted_confidence": 93.1,
+      "predicted_level": 2,
+      "submitted_level": 2,
+      "expected_class": "plinth",
+      "expected_confidence": 93.1,
+      "image_id": "image_3",
+      "message": "Verification successful. Stage 'plinth' confirmed."
+    }
+  ]
+}
+```
+
+#### Response Schema — `BatchPredictResponse`
+
+| Field     | Type                     | Description                                         |
+|-----------|--------------------------|-----------------------------------------------------|
+| `results` | array of `BatchImageResult` | List of verification results for each input image  |
+
+Each `BatchImageResult` contains:
+
+| Field                  | Type              | Description                                                        |
+|------------------------|-------------------|--------------------------------------------------------------------|
+| `status`               | `PredictionStatus`| `"success"` or `"manual_check_needed"`                            |
+| `predicted_class`      | string \| null    | Actual class label predicted by the model                          |
+| `predicted_confidence` | float [0–100]     | Confidence (%) for the predicted class                             |
+| `predicted_level`      | integer \| null   | Construction level corresponding to `predicted_class`               |
+| `submitted_level`      | integer           | The `label` value sent by the caller                               |
+| `expected_class`       | string            | The stage label that maps to `submitted_level`                     |
+| `expected_confidence`  | float [0–100]     | Confidence (%) for the expected class                              |
+| `image_id`             | string            | Caller-supplied image identifier                                   |
+| `message`              | string            | Human-readable summary of the outcome                              |
 
 ---
 
@@ -303,6 +437,7 @@ MMAY/
     ├── api/
     │   ├── dependencies.py          # Shared FastAPI Depends() providers
     │   └── routes/
+    │       ├── batch_predict.py     # POST /predict/batch
     │       ├── health.py            # GET /health
     │       └── predict.py           # POST /predict
     ├── core/

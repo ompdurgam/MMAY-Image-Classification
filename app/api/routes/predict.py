@@ -8,7 +8,7 @@ The route does NO business logic — it only:
 from __future__ import annotations
 
 import time
-from typing import Annotated
+from typing import Annotated, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
@@ -22,6 +22,19 @@ from app.services.preprocessing import decode_and_preprocess
 
 router = APIRouter(tags=["Prediction"])
 logger = get_logger(__name__)
+
+
+def _reverse_level_lookup(
+    level_class_map: Dict[int, str],
+    class_name: Optional[str],
+) -> Optional[int]:
+    """Return the construction level for a given class name, or None."""
+    if class_name is None:
+        return None
+    for lvl, name in level_class_map.items():
+        if name == class_name:
+            return lvl
+    return None
 
 
 @router.post(
@@ -116,12 +129,16 @@ async def verify_image(
         confidence_threshold = cfg.CONFIDENCE_THRESHOLD,
     )
 
-    # ── 6. Map to response schema ────────────────────────────────────────────
+    # ── 6. Resolve predicted_level from predicted_class ──────────────────────────
+    predicted_level = _reverse_level_lookup(cfg.LEVEL_CLASS_MAP, result.predicted_class)
+
+    # ── 7. Map to response schema ────────────────────────────────────────────
     if result.success:
         return PredictResponse(
             status               = PredictionStatus.SUCCESS,
             predicted_class      = result.predicted_class,
             predicted_confidence = round(result.confidence * 100, 2),
+            predicted_level      = predicted_level,
             submitted_level      = level,
             expected_class       = result.expected_class,
             expected_confidence  = round(result.expected_confidence * 100, 2),
@@ -133,6 +150,7 @@ async def verify_image(
         status               = PredictionStatus.MANUAL_CHECK_NEEDED,
         predicted_class      = result.predicted_class,
         predicted_confidence = round(result.confidence * 100, 2),
+        predicted_level      = predicted_level,
         submitted_level      = level,
         expected_class       = result.expected_class,
         expected_confidence  = round(result.expected_confidence * 100, 2),
