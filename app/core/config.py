@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 class Settings:
     # ── Model ─────────────────────────────────────────────────────────────────
-    MODEL_PATH: str = os.getenv("MODEL_PATH", "MMAY_Image_2-0.h5")
+    MODEL_PATH: str = os.getenv("MODEL_PATH", "MMAY_Modelv2.h5")
     IMG_HEIGHT: int = int(os.getenv("IMG_HEIGHT", "224"))
     IMG_WIDTH:  int = int(os.getenv("IMG_WIDTH",  "224"))
     # ── Inference ──────────────────────────────────────────────────────────────

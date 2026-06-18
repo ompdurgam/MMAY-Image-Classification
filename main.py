@@ -15,5 +15,5 @@ if __name__ == "__main__":
         host      = cfg.APP_HOST,
         port      = cfg.APP_PORT,
         log_level = cfg.LOG_LEVEL,
-        reload    = False,
+        reload    = True,
     )
