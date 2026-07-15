@@ -121,4 +121,4 @@ class HealthResponse(BaseModel):
     status:       str  = Field(..., description="'ok' or 'degraded'.")
     model_loaded: bool = Field(..., description="Whether the ML model is ready.")
     model_name:   str  = Field(..., description="Name of the loaded ML model file (without extension).")
-    version:      str  = "1.0.0"
+    version:      str  = "2.0.0"

@@ -1,6 +1,6 @@
 # MMAY Image Verification API — Documentation
 
-> **Version:** 1.0.0  
+> **Version:** 2.0.0  
 > **Base URL:** `http://<host>:8000`  
 > **Interactive Docs:** `/docs` (Swagger UI) · `/redoc` (ReDoc)
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-The **Mukhyamantri Avas Yojana (MMAY) Image Verification API** verifies construction-stage photographs against the expected stage for a given scheme level. It uses a trained Keras model (`MMAY_Image_2-0.h5`) to classify submitted images and returns a structured verification result.
+The **Mukhyamantri Avas Yojana (MMAY) Image Verification API** verifies construction-stage photographs against the expected stage for a given scheme level. It uses a trained Keras model (`MMAY_EfficientNetV2M_final.keras`) — an EfficientNetV2M fine-tuned on MMAY site images — to classify submitted images and returns a structured verification result.
 
 ### Construction Level → Stage Mapping
 
@@ -358,9 +358,9 @@ The API is configured entirely through environment variables (or a `.env` file i
 
 | Variable               | Default                                                   | Description                                             |
 |------------------------|-----------------------------------------------------------|---------------------------------------------------------|
-| `MODEL_PATH`           | `MMAY_Image_2-0.h5`                                       | Path to the Keras model file                            |
-| `IMG_HEIGHT`           | `224`                                                     | Input image height (pixels) expected by the model       |
-| `IMG_WIDTH`            | `224`                                                     | Input image width (pixels) expected by the model        |
+| `MODEL_PATH`           | `model/MMAY_EfficientNetV2M_final.keras`                  | Path to the Keras model file                            |
+| `IMG_HEIGHT`           | `300`                                                     | Input image height (pixels) expected by the model       |
+| `IMG_WIDTH`            | `300`                                                     | Input image width (pixels) expected by the model        |
 | `CONFIDENCE_THRESHOLD` | `0.70`                                                    | Minimum confidence (0–1) to accept a prediction         |
 | `LEVEL_CLASS_MAP`      | `{"2":"plinth","3":"roof_cast","4":"completion"}`         | JSON map from level integer to class label              |
 | `CLASS_INDEX_MAP`      | `{"0":"completion","1":"plinth","2":"roof_cast"}` | JSON map from model output index to class label |
@@ -382,8 +382,8 @@ Before inference, every uploaded image goes through the following steps internal
 4. **MIME type check** — rejects types not in `ALLOWED_IMAGE_TYPES` (`415`).
 5. **Decode** — `PIL.Image.open()` decodes the bytes; corrupt data raises `400`.
 6. **Convert to RGB** — strips alpha channels and palette modes.
-7. **Resize** — bilinear resize to `IMG_HEIGHT × IMG_WIDTH` (default 224×224).
-8. **Normalise** — pixel values divided by 255, yielding floats in `[0.0, 1.0]`.
+7. **Resize** — bilinear resize to `IMG_HEIGHT × IMG_WIDTH` (default 300×300).
+8. **Normalise** — pixel values kept as-is in `[0, 255]` (EfficientNetV2M includes a built-in Rescaling layer; no manual normalisation is applied).
 9. **Batch dim** — array is expanded to shape `(1, H, W, 3)` for `model.predict`.
 
 ---

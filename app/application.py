@@ -5,10 +5,13 @@ Lifespan (startup/shutdown) lives here, not in main.py.
 """
 from __future__ import annotations
 
+import traceback
+
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import batch_predict, health, predict
 from app.core.config import get_settings
@@ -53,7 +56,7 @@ def create_app() -> FastAPI:
             "Verifies construction-stage photographs for the "
             "**Mukhyamantri Avas Yojana** scheme."
         ),
-        version     = "1.0.0",
+        version     = "2.0.0",
         lifespan    = lifespan,
         docs_url    = "/docs",
         redoc_url   = "/redoc",
@@ -66,6 +69,13 @@ def create_app() -> FastAPI:
         allow_methods  = ["GET", "POST"],
         allow_headers  = ["*"],
     )
+
+    # ── Debug: expose unhandled exceptions (remove in production) ─────────────
+    @app.exception_handler(Exception)
+    async def _debug_exception_handler(request: Request, exc: Exception):
+        tb = traceback.format_exc()
+        logger.error("Unhandled exception:\n%s", tb)
+        return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
 
     # Routers
     app.include_router(health.router)

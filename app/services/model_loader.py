@@ -14,6 +14,8 @@ logger = get_logger(__name__)
 def load_keras_model(model_path: str):
     """
     Load and return a Keras model from *model_path*.
+    Supports both the native `.keras` format (EfficientNetV2M) and the
+    legacy `.h5` SavedModel format.
     Raises FileNotFoundError if the file is missing.
     Raises RuntimeError if TensorFlow / Keras cannot load the file.
     """

@@ -16,9 +16,10 @@ def decode_and_preprocess(
     img_width:   int,
 ) -> np.ndarray:
     """
-    Decode *image_bytes*, resize to (img_height × img_width), normalise to [0, 1].
-
-    Returns ndarray of shape (1, H, W, 3).
+    Decode *image_bytes*, resize to (img_height × img_width).
+    Returns ndarray of shape (1, H, W, 3) with pixel values in [0, 255].
+    EfficientNetV2M includes a built-in Rescaling layer — no manual
+    normalisation is applied here.
     Raises ValueError for corrupt / non-image data.
     """
     try:
@@ -28,7 +29,7 @@ def decode_and_preprocess(
     except Exception as exc:
         raise ValueError(f"Image decode error: {exc}") from exc
 
-    img   = img.resize((img_width, img_height), Image.BILINEAR)
+    img   = img.resize((img_width, img_height), Image.Resampling.BILINEAR)
     arr   = np.array(img, dtype=np.float32)
-    arr   = (arr / 127.5) - 1.0  # MobileNetV2 expects [-1, 1]
+    # EfficientNetV2M has a built-in Rescaling layer; pass raw [0, 255] values.
     return np.expand_dims(arr, axis=0)   # (1, H, W, 3)

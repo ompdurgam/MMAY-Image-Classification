@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 class Settings:
     # ── Model ─────────────────────────────────────────────────────────────────
-    MODEL_PATH: str = os.getenv("MODEL_PATH", "MMAY_Modelv2.h5")
-    IMG_HEIGHT: int = int(os.getenv("IMG_HEIGHT", "224"))
-    IMG_WIDTH:  int = int(os.getenv("IMG_WIDTH",  "224"))
+    MODEL_PATH: str = os.getenv("MODEL_PATH", "model/MMAY_EfficientNetV2M_final.keras")
+    IMG_HEIGHT: int = int(os.getenv("IMG_HEIGHT", "300"))
+    IMG_WIDTH:  int = int(os.getenv("IMG_WIDTH",  "300"))
     # ── Inference ──────────────────────────────────────────────────────────────
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.70"))
     # ── Mappings ───────────────────────────────────────────────────────────────
