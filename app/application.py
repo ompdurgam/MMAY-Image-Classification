@@ -5,8 +5,6 @@ Lifespan (startup/shutdown) lives here, not in main.py.
 """
 from __future__ import annotations
 
-import traceback
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -38,8 +36,9 @@ async def lifespan(app: FastAPI):
             cfg.CONFIDENCE_THRESHOLD * 100,
         )
     except Exception as exc:
-        # Log but don't crash — /health will report degraded
-        logger.error("Startup error: %s", exc)
+        # Log the full error — but DO NOT crash the process so that the
+        # /health endpoint can report "degraded" and ops can investigate.
+        logger.error("Startup error — model unavailable: %s", exc, exc_info=True)
 
     yield
 
@@ -62,22 +61,34 @@ def create_app() -> FastAPI:
         redoc_url   = "/redoc",
     )
 
-    # Middleware
+    # ── CORS ────────────────────────────────────────────────────────────────────
+    # Origins are read from the ALLOWED_ORIGINS env var (see config.py).
+    # Default is localhost only — set ALLOWED_ORIGINS=* only for local dev.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins  = ["*"],   # restrict to known domains in production
-        allow_methods  = ["GET", "POST"],
-        allow_headers  = ["*"],
+        allow_origins     = cfg.ALLOWED_ORIGINS,
+        allow_methods     = ["GET", "POST"],
+        allow_headers     = ["Content-Type", "Authorization"],
+        allow_credentials = False,
     )
 
-    # ── Debug: expose unhandled exceptions (remove in production) ─────────────
+    # ── Global exception handler ────────────────────────────────────────────────
+    # Returns a generic message — never expose stack traces to clients.
     @app.exception_handler(Exception)
-    async def _debug_exception_handler(request: Request, exc: Exception):
-        tb = traceback.format_exc()
-        logger.error("Unhandled exception:\n%s", tb)
-        return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
+    async def _safe_exception_handler(request: Request, exc: Exception):
+        # Log the full traceback server-side for debugging
+        logger.error(
+            "Unhandled exception on %s %s",
+            request.method,
+            request.url.path,
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "An internal server error occurred. Please try again later."},
+        )
 
-    # Routers
+    # ── Routers ─────────────────────────────────────────────────────────────────
     app.include_router(health.router)
     app.include_router(predict.router)
     app.include_router(batch_predict.router)

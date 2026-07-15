@@ -17,7 +17,10 @@ _model = None
 def set_model(model) -> None:
     global _model
     _model = model
-    logger.info("Model registered in model_store.")
+    if model is not None:
+        logger.info("Model registered in model_store.")
+    else:
+        logger.info("Model released from model_store.")
 
 
 def get_model():
